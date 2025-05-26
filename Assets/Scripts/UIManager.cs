@@ -11,6 +11,8 @@ public class UIManager : MonoBehaviour
     public GameObject ghostInfoPanel;
     public GameObject mortalInfoPanel;
     public GameObject gameOverPanel;
+    public GameObject missionCompletePanel;
+    public GameObject missionFailedPanel;
     
     [Header("Plasm UI")]
     public Slider plasmSlider;
@@ -42,6 +44,13 @@ public class UIManager : MonoBehaviour
     public TextMeshProUGUI messageText;
     public float messageDisplayTime = 3f;
     
+    [Header("Mission Results")]
+    public TextMeshProUGUI missionCompleteScoreText;
+    public TextMeshProUGUI missionFailedReasonText;
+    public Button restartButton;
+    public Button nextLevelButton;
+    public Button mainMenuButton;
+    
     // References
     private List<Button> ghostButtons = new List<Button>();
     private List<GameObject> mortalStatusElements = new List<GameObject>();
@@ -62,6 +71,8 @@ public class UIManager : MonoBehaviour
             GameManager.Instance.OnPlasmChanged += UpdatePlasmDisplay;
             GameManager.Instance.OnGhostSelected += UpdateGhostSelection;
             GameManager.Instance.OnLevelComplete += ShowLevelComplete;
+            GameManager.Instance.OnMissionCompleted += ShowMissionComplete;
+            GameManager.Instance.OnMissionFailed += ShowMissionFailed;
         }
         
         // Set up UI elements
@@ -76,6 +87,10 @@ public class UIManager : MonoBehaviour
             mortalInfoPanel.SetActive(false);
         if (gameOverPanel != null)
             gameOverPanel.SetActive(false);
+        if (missionCompletePanel != null)
+            missionCompletePanel.SetActive(false);
+        if (missionFailedPanel != null)
+            missionFailedPanel.SetActive(false);
         if (messagePanel != null)
             messagePanel.SetActive(false);
         
@@ -94,6 +109,13 @@ public class UIManager : MonoBehaviour
             return;
         
         var ghosts = GameManager.Instance.GetAvailableGhosts();
+        
+        // Clear existing buttons
+        foreach (Transform child in ghostButtonContainer)
+        {
+            Destroy(child.gameObject);
+        }
+        ghostButtons.Clear();
         
         foreach (var ghost in ghosts)
         {
@@ -122,6 +144,14 @@ public class UIManager : MonoBehaviour
             return;
         
         var mortals = GameManager.Instance.GetMortals();
+        
+        // Clear existing status elements
+        foreach (var element in mortalStatusElements)
+        {
+            if (element != null)
+                Destroy(element);
+        }
+        mortalStatusElements.Clear();
         
         foreach (var mortal in mortals)
         {
@@ -168,6 +198,22 @@ public class UIManager : MonoBehaviour
         {
             timeScaleSlider.value = 1f;
             timeScaleSlider.onValueChanged.AddListener(OnTimeScaleChanged);
+        }
+        
+        // Set up result panel buttons
+        if (restartButton != null)
+        {
+            restartButton.onClick.AddListener(RestartLevel);
+        }
+        
+        if (nextLevelButton != null)
+        {
+            nextLevelButton.onClick.AddListener(LoadNextLevel);
+        }
+        
+        if (mainMenuButton != null)
+        {
+            mainMenuButton.onClick.AddListener(LoadMainMenu);
         }
     }
     
@@ -276,6 +322,8 @@ public class UIManager : MonoBehaviour
             var statusObj = mortalStatusElements[i];
             var mortal = mortals[i];
             
+            if (statusObj == null || mortal == null) continue;
+            
             // Update fear bar
             Slider fearSlider = statusObj.transform.Find("FearSlider")?.GetComponent<Slider>();
             if (fearSlider != null)
@@ -353,7 +401,14 @@ public class UIManager : MonoBehaviour
     {
         if (GameManager.Instance != null)
         {
-            GameManager.Instance.timeScale = GameManager.Instance.timeScale > 0 ? 0 : 1;
+            if (GameManager.Instance.IsGamePaused())
+            {
+                GameManager.Instance.ResumeGame();
+            }
+            else
+            {
+                GameManager.Instance.PauseGame();
+            }
         }
     }
     
@@ -381,12 +436,46 @@ public class UIManager : MonoBehaviour
         ShowMessage("Level Complete!");
     }
     
+    // Missing method implementations called from MissionManager
+    public void ShowMissionComplete(int score)
+    {
+        if (missionCompletePanel != null)
+        {
+            missionCompletePanel.SetActive(true);
+            
+            if (missionCompleteScoreText != null)
+            {
+                missionCompleteScoreText.text = $"Mission Complete!\nScore: {score}";
+            }
+        }
+        
+        ShowMessage($"Mission Complete! Score: {score}");
+    }
+    
+    public void ShowMissionFailed(string reason)
+    {
+        if (missionFailedPanel != null)
+        {
+            missionFailedPanel.SetActive(true);
+            
+            if (missionFailedReasonText != null)
+            {
+                missionFailedReasonText.text = $"Mission Failed!\n{reason}";
+            }
+        }
+        
+        ShowMessage($"Mission Failed: {reason}");
+    }
+    
     public void ShowMessage(string message)
     {
         if (messagePanel != null && messageText != null)
         {
             messageText.text = message;
             messagePanel.SetActive(true);
+            
+            // Cancel any existing hide message invoke
+            CancelInvoke(nameof(HideMessage));
             
             // Hide message after delay
             Invoke(nameof(HideMessage), messageDisplayTime);
@@ -404,13 +493,59 @@ public class UIManager : MonoBehaviour
     // Public methods for UI buttons
     public void RestartLevel()
     {
-        UnityEngine.SceneManagement.SceneManager.LoadScene(
-            UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.RestartLevel();
+        }
+        else
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        }
+    }
+    
+    public void LoadNextLevel()
+    {
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.LoadNextLevel();
+        }
+    }
+    
+    public void LoadMainMenu()
+    {
+        // Load the main menu scene (assuming it's at build index 0)
+        UnityEngine.SceneManagement.SceneManager.LoadScene(0);
     }
     
     public void QuitGame()
     {
-        Application.Quit();
+        #if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+        #else
+            Application.Quit();
+        #endif
+    }
+    
+    // Utility methods for updating UI
+    public void UpdateObjectiveText(string objective)
+    {
+        if (objectiveText != null)
+        {
+            objectiveText.text = objective;
+        }
+    }
+    
+    public void SetPauseButtonText(string text)
+    {
+        if (pauseButton != null)
+        {
+            TextMeshProUGUI buttonText = pauseButton.GetComponentInChildren<TextMeshProUGUI>();
+            if (buttonText != null)
+            {
+                buttonText.text = text;
+            }
+        }
     }
     
     void OnDestroy()
@@ -421,6 +556,8 @@ public class UIManager : MonoBehaviour
             GameManager.Instance.OnPlasmChanged -= UpdatePlasmDisplay;
             GameManager.Instance.OnGhostSelected -= UpdateGhostSelection;
             GameManager.Instance.OnLevelComplete -= ShowLevelComplete;
+            GameManager.Instance.OnMissionCompleted -= ShowMissionComplete;
+            GameManager.Instance.OnMissionFailed -= ShowMissionFailed;
         }
     }
 }

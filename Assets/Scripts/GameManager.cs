@@ -21,11 +21,14 @@ public class GameManager : MonoBehaviour
     private List<Anchor> anchors = new List<Anchor>();
     private Ghost selectedGhost;
     private bool gameActive = true;
+    private bool gamePaused = false;
     
     // Events
     public System.Action<int> OnPlasmChanged;
     public System.Action<Ghost> OnGhostSelected;
     public System.Action OnLevelComplete;
+    public System.Action<int> OnMissionCompleted;
+    public System.Action<string> OnMissionFailed;
     
     void Awake()
     {
@@ -61,6 +64,7 @@ public class GameManager : MonoBehaviour
     void FindAllGhosts()
     {
         Ghost[] ghosts = FindObjectsOfType<Ghost>();
+        availableGhosts.Clear();
         availableGhosts.AddRange(ghosts);
         
         foreach (Ghost ghost in ghosts)
@@ -72,6 +76,7 @@ public class GameManager : MonoBehaviour
     void FindAllMortals()
     {
         Mortal[] foundMortals = FindObjectsOfType<Mortal>();
+        mortals.Clear();
         mortals.AddRange(foundMortals);
         
         foreach (Mortal mortal in foundMortals)
@@ -83,6 +88,7 @@ public class GameManager : MonoBehaviour
     void FindAllAnchors()
     {
         Anchor[] foundAnchors = FindObjectsOfType<Anchor>();
+        anchors.Clear();
         anchors.AddRange(foundAnchors);
     }
     
@@ -174,6 +180,83 @@ public class GameManager : MonoBehaviour
         }
     }
     
+    // Missing methods that were called from MissionManager
+    public void OnMissionCompleted(int score)
+    {
+        gameActive = false;
+        Debug.Log($"Mission completed with score: {score}");
+        OnMissionCompleted?.Invoke(score);
+        
+        // You can add additional logic here like:
+        // - Save high score
+        // - Unlock next level
+        // - Award achievements
+    }
+    
+    public void OnMissionFailed(string reason)
+    {
+        gameActive = false;
+        Debug.Log($"Mission failed: {reason}");
+        OnMissionFailed?.Invoke(reason);
+        
+        // You can add additional logic here like:
+        // - Show retry options
+        // - Reset level state
+        // - Track failure statistics
+    }
+    
+    // Game state management
+    public void PauseGame()
+    {
+        gamePaused = true;
+        timeScale = 0f;
+        Time.timeScale = 0f;
+    }
+    
+    public void ResumeGame()
+    {
+        gamePaused = false;
+        timeScale = 1f;
+        Time.timeScale = 1f;
+    }
+    
+    public bool IsGamePaused()
+    {
+        return gamePaused;
+    }
+    
+    public bool IsGameActive()
+    {
+        return gameActive;
+    }
+    
+    public void SetGameActive(bool active)
+    {
+        gameActive = active;
+    }
+    
+    // Utility methods
+    public void RestartLevel()
+    {
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+    }
+    
+    public void LoadNextLevel()
+    {
+        int currentScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex;
+        int nextScene = currentScene + 1;
+        
+        if (nextScene < UnityEngine.SceneManagement.SceneManager.sceneCountInBuildSettings)
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene(nextScene);
+        }
+        else
+        {
+            Debug.Log("No more levels available!");
+        }
+    }
+    
     void Update()
     {
         if (!gameActive) return;
@@ -182,7 +265,10 @@ public class GameManager : MonoBehaviour
         HandleInput();
         
         // Update time scale
-        Time.timeScale = timeScale;
+        if (!gamePaused)
+        {
+            Time.timeScale = timeScale;
+        }
     }
     
     void HandleInput()
@@ -201,6 +287,15 @@ public class GameManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Q) && selectedGhost != null)
         {
             selectedGhost.ActivateSecondaryPower();
+        }
+        
+        // Pause/Resume with ESC
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (gamePaused)
+                ResumeGame();
+            else
+                PauseGame();
         }
     }
     
@@ -232,7 +327,9 @@ public class GameManager : MonoBehaviour
         }
     }
     
+    // Getter methods
     public int GetCurrentPlasm() => currentPlasm;
     public List<Ghost> GetAvailableGhosts() => availableGhosts;
     public List<Mortal> GetMortals() => mortals;
+    public List<Anchor> GetAnchors() => anchors;
 }

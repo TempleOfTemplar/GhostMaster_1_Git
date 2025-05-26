@@ -1,54 +1,78 @@
-// MissionObjective.cs - Defines mission goals
 using UnityEngine;
-using System;
-
-[System.Serializable]
-public enum ObjectiveType
-{
-    ScareAllMortals,
-    ScareSpecificMortal,
-    SurviveTime,
-    CollectPlasm,
-    DestroyObjects,
-    PreventMortalEscape
-}
 
 [System.Serializable]
 public class MissionObjective
 {
-    public string objectiveName;
-    public string description;
-    public ObjectiveType type;
-    public int targetValue;
-    public int currentValue;
-    public bool isCompleted;
-    public bool isOptional;
+    [Header("Objective Settings")]
+    public string objectiveName = "Unnamed Objective";
+    public ObjectiveType type = ObjectiveType.ScareAllMortals;
+    public int targetValue = 1;
+    public bool isOptional = false;
     
-    public event Action<MissionObjective> OnObjectiveCompleted;
+    [Header("Current Status")]
+    public int currentProgress = 0;
+    public bool isCompleted = false;
     
-    public void UpdateProgress(int value)
+    // Events
+    public System.Action<MissionObjective> OnObjectiveCompleted;
+    public System.Action<MissionObjective> OnProgressChanged;
+    
+    public void SetProgress(int progress)
     {
-        currentValue = Mathf.Min(currentValue + value, targetValue);
-        CheckCompletion();
-    }
-    
-    public void SetProgress(int value)
-    {
-        currentValue = Mathf.Min(value, targetValue);
-        CheckCompletion();
-    }
-    
-    private void CheckCompletion()
-    {
-        if (!isCompleted && currentValue >= targetValue)
+        int oldProgress = currentProgress;
+        currentProgress = progress;
+        
+        // Notify progress change
+        if (oldProgress != currentProgress)
         {
-            isCompleted = true;
-            OnObjectiveCompleted?.Invoke(this);
+            OnProgressChanged?.Invoke(this);
+        }
+        
+        // Check if objective is now completed
+        if (!isCompleted && currentProgress >= targetValue)
+        {
+            CompleteObjective();
         }
     }
     
-    public float GetProgressPercentage()
+    public void CompleteObjective()
     {
-        return targetValue > 0 ? (float)currentValue / targetValue : 0f;
+        if (isCompleted) return;
+        
+        isCompleted = true;
+        OnObjectiveCompleted?.Invoke(this);
     }
+    
+    public float GetProgressRatio()
+    {
+        if (targetValue <= 0) return 1f;
+        return Mathf.Clamp01((float)currentProgress / targetValue);
+    }
+    
+    public string GetProgressText()
+    {
+        switch (type)
+        {
+            case ObjectiveType.ScareAllMortals:
+                return $"Scare Mortals: {currentProgress}/{targetValue}";
+            case ObjectiveType.CollectPlasm:
+                return $"Collect Plasm: {currentProgress}/{targetValue}";
+            case ObjectiveType.SurviveTime:
+                return $"Survive Time: {currentProgress}s/{targetValue}s";
+            default:
+                return $"{objectiveName}: {currentProgress}/{targetValue}";
+        }
+    }
+}
+
+public enum ObjectiveType
+{
+    ScareAllMortals,
+    CollectPlasm,
+    SurviveTime,
+    PossessMortals,
+    UseSpecificPower,
+    DefeatBoss,
+    FindSecrets,
+    NoMortalsEscape
 }
