@@ -39,6 +39,7 @@ public class Mortal : MonoBehaviour
     private bool isStunned = false;
     private bool isPossessed = false;
     private bool isFrozen = false;
+    private bool hasFled = false;
     private float originalSpeed;
     private int currentWaypoint = 0;
     
@@ -199,6 +200,12 @@ public class Mortal : MonoBehaviour
         }
     }
     
+    // Method called by PoltergeistEffect and other scripts
+    public void AddFear(float amount)
+    {
+        TakeFear(amount);
+    }
+    
     public void TakeFear(float amount)
     {
         if (isScaredAway || !isActive) return;
@@ -231,6 +238,27 @@ public class Mortal : MonoBehaviour
         StartCoroutine(FearReaction());
         
         Debug.Log($"{mortalName} fear: {currentFear:F1}/{maxFear}");
+    }
+    
+    // Method called by ScareEffect
+    public void TriggerFleeState()
+    {
+        if (isScaredAway || !isActive) return;
+        
+        // Force the mortal to become scared away regardless of current fear level
+        BecomeScaredAway();
+    }
+    
+    // Method called by MissionManager to get fear level
+    public float GetFearLevel()
+    {
+        return currentFear;
+    }
+    
+    // Method called by MissionManager to check if mortal has fled
+    public bool HasFled()
+    {
+        return hasFled;
     }
     
     public void Stun(float duration)
@@ -310,6 +338,7 @@ public class Mortal : MonoBehaviour
     void BecomeScaredAway()
     {
         isScaredAway = true;
+        hasFled = true; // Set the fled flag
         agent.speed = fleeSpeed;
         
         // Stop current behavior
@@ -354,7 +383,10 @@ public class Mortal : MonoBehaviour
         Debug.Log($"{mortalName} is scared away!");
         
         // Notify game manager to check win condition
-        GameManager.Instance.CheckWinCondition();
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.CheckWinCondition();
+        }
     }
     
     IEnumerator FearReaction()
@@ -485,7 +517,10 @@ public class Mortal : MonoBehaviour
         Debug.Log($"{mortalName} has fled the building!");
         
         // Give player some plasm for scaring away mortal
-        GameManager.Instance.GainPlasm(10);
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.GainPlasm(10);
+        }
     }
     
     void UpdateFearVisuals()
@@ -517,7 +552,7 @@ public class Mortal : MonoBehaviour
         }
     }
     
-    // Public getters
+    // Public getters - existing methods
     public bool IsScaredAway() => isScaredAway;
     public bool IsActive() => isActive;
     public float GetCurrentFear() => currentFear;
